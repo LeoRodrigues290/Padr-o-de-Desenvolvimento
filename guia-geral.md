@@ -146,7 +146,6 @@ Usuário → Cloudflare (Cache/Segurança) → Firebase Services
     "stylelint": "^16.0.0",
     "stylelint-config-standard": "^36.0.0",
 
-    "@lhci/cli": "^0.14.0",
     "wrangler": "^3.57.0"
   }
 }
@@ -825,15 +824,8 @@ export class CacheService {
   async invalidateByTags(tags: string[]): Promise<void> {
     await Promise.all(
       tags.map(async (tag) => {
-        const list = await this.kv.list({ prefix: `tag:${tag}:` });
-
-        await Promise.all(
-          list.keys.map(async (key) => {
-            const originalKey = key.name.replace(`tag:${tag}:`, '');
-            await this.kv.delete(originalKey);
-            await this.kv.delete(key.name);
-          })
-        );
+        const list = await this.kv.list({ prefix: tag });
+        await Promise.all(list.keys.map((key) => this.kv.delete(key.name)));
       })
     );
   }
@@ -1217,45 +1209,27 @@ export const useUIStore = create<UIStore>()(
   )
 );
 
-interface ProjectFilters {
-  status: 'ALL' | 'ACTIVE' | 'COMPLETED';
-  search: string;
+interface DataStore {
+  projects: Project[];
+  setProjects: (projects: Project[]) => void;
+  addProject: (project: Project) => void;
+  updateProject: (id: string, updates: Partial<Project>) => void;
 }
 
-interface DataViewStore {
-  selectedProjectId: string | null;
-  filters: ProjectFilters;
-  optimisticProjects: Array<{ tempId: string; input: CreateProjectInput }>;
-  setSelectedProject: (id: string | null) => void;
-  setFilters: (filters: Partial<ProjectFilters>) => void;
-  enqueueOptimistic: (input: CreateProjectInput) => string;
-  clearOptimistic: (tempId: string) => void;
-}
-
-export const useDataViewStore = create<DataViewStore>()(
+export const useDataStore = create<DataStore>()(
   devtools(
     (set) => ({
-      selectedProjectId: null,
-      filters: { status: 'ALL', search: '' },
-      optimisticProjects: [],
-      setSelectedProject: (id) => set({ selectedProjectId: id }),
-      setFilters: (filters) =>
-        set((state) => ({ filters: { ...state.filters, ...filters } })),
-      enqueueOptimistic: (input) => {
-        const tempId = crypto.randomUUID();
+      projects: [],
+      setProjects: (projects) => set({ projects }),
+      addProject: (project) => set((state) => ({ projects: [...state.projects, project] })),
+      updateProject: (id, updates) =>
         set((state) => ({
-          optimisticProjects: [...state.optimisticProjects, { tempId, input }]
-        }));
-        return tempId;
-      },
-      clearOptimistic: (tempId) =>
-        set((state) => ({
-          optimisticProjects: state.optimisticProjects.filter(
-            (project) => project.tempId !== tempId
+          projects: state.projects.map((project) =>
+            project.id === id ? { ...project, ...updates } : project
           )
         }))
     }),
-    { name: 'DataViewStore' }
+    { name: 'DataStore' }
   )
 );
 
@@ -1552,7 +1526,9 @@ jobs:
       run: npx @next/bundle-analyzer
 
     - name: Lighthouse CI
-      run: npx lhci autorun
+      run: |
+        npm install -g @lhci/cli
+        lhci autorun
 
     - name: Security audit
       run: npm audit --production --audit-level=high
