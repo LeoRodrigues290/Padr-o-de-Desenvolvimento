@@ -99,46 +99,49 @@ Usuário → Cloudflare (Cache/Segurança) → Firebase Services
 ```json
 {
   "dependencies": {
-    "next": "15.0.0",
-    "react": "19.0.0",
-    "typescript": "5.5.0",
-    
-    "firebase": "11.0.0",
-    "firebase-admin": "12.0.0",
-    "@firebase/data-connect": "latest",
-    
-    "@tanstack/react-query": "5.40.0",
-    "zustand": "4.5.0",
-    
-    "react-hook-form": "7.51.0",
-    "@hookform/resolvers": "3.3.4",
-    "zod": "3.23.0",
-    
-    "framer-motion": "11.0.0",
-    
-    "graphql": "16.8.0",
-    "@apollo/client": "3.8.0",
-    
-    "@radix-ui/react-*": "latest",
-    "tailwindcss": "3.4.0",
-    "class-variance-authority": "0.7.0",
-    "clsx": "2.1.0"
+    "next": "^15.0.0",
+    "react": "^19.0.0",
+    "typescript": "^5.5.0",
+
+    "firebase": "^11.0.0",
+    "firebase-admin": "^12.0.0",
+    "@firebase/data-connect": "^0.1.0",
+
+    "@tanstack/react-query": "^5.40.0",
+    "@tanstack/react-table": "^8.10.0",
+    "zustand": "^4.5.0",
+
+    "react-hook-form": "^7.51.0",
+    "@hookform/resolvers": "^3.3.4",
+    "zod": "^3.23.0",
+    "date-fns": "^3.0.0",
+
+    "framer-motion": "^11.0.0",
+    "cmdk": "^0.2.0",
+
+    "graphql": "^16.8.0",
+    "@apollo/client": "^3.8.0",
+
+    "@radix-ui/react-*": "^1.0.0",
+    "tailwindcss": "^3.4.0",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.0"
   },
   "devDependencies": {
-    "vitest": "1.6.0",
-    "@testing-library/react": "15.0.0",
-    "firebase-tools": "13.0.0",
-    
-    "husky": "9.0.0",
-    "lint-staged": "15.2.0",
-    "@typescript-eslint/eslint-plugin": "7.0.0",
-    "@typescript-eslint/parser": "7.0.0",
-    
-    "prettier": "3.0.0",
-    "stylelint": "16.0.0",
-    "stylelint-config-standard": "36.0.0",
-    
-    "wrangler": "3.57.0"
+    "vitest": "^1.6.0",
+    "@testing-library/react": "^15.0.0",
+    "firebase-tools": "^13.0.0",
+
+    "husky": "^9.0.0",
+    "lint-staged": "^15.2.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+
+    "prettier": "^3.0.0",
+    "stylelint": "^16.0.0",
+    "stylelint-config-standard": "^36.0.0",
+
+    "wrangler": "^3.57.0"
   }
 }
 ```
@@ -149,10 +152,20 @@ Usuário → Cloudflare (Cache/Segurança) → Firebase Services
 |------------|--------------|----------------------------|
 | Firebase Data Connect | GraphQL tipado nativo | Integração direta no IDE |
 | TanStack Query | Cache client-side inteligente | Complementa cache do Workers |
+| TanStack React Table | Tabelas complexas com sorting/virtualização | Compatível com dados do Data Connect |
 | Zustand | Estado global leve | Funciona com atualizações em tempo real |
 | React Hook Form + Zod | Forms performáticos | Validação unificada client/server |
+| date-fns | Manipulação de datas com i18n leve | Usa timezone do projeto sem dependências pesadas |
 | Framer Motion | Animações fluidas | Zero conflito com arquitetura |
 | Apollo Client | GraphQL client | Otimizado para Data Connect |
+| cmdk | Command palette acessível | Melhora UX dentro do App Router |
+
+### 2.3. Por que NÃO usar X
+
+- **Redux Toolkit:** adiciona boilerplate e duplicidade de cache frente ao TanStack Query e Zustand; aumenta bundle size sem ganhos claros em apps focados em GraphQL/Data Connect.
+- **Moment.js:** biblioteca descontinuada e pesada; o `date-fns` entrega tree-shaking, suporte a locales e menor footprint para aplicações edge.
+- **Formik:** abstrações antigas com re-render excessivo; `react-hook-form` oferece controles não controlados e integração nativa com Zod.
+- **SWR isolado:** TanStack Query já provê stale-while-revalidate, cache persistente e devtools; manter apenas um padrão evita bugs de sincronização.
 
 ---
 
@@ -164,16 +177,19 @@ Usuário → Cloudflare (Cache/Segurança) → Firebase Services
 # 1. Acessar Firebase Studio
 # https://firebase.studio/
 
-# 2. Criar novo projeto
-firebase studio:create meu-projeto-enterprise
+# 2. Criar e vincular projeto Firebase real
+firebase login
+firebase projects:create meu-projeto-enterprise --display-name "Meu Projeto Enterprise"
+firebase use meu-projeto-enterprise
 
-# 3. Configurar Data Connect
-firebase data-connect:init
-? Database type: PostgreSQL
-? Schema name: enterprise_app
+# 3. Inicializar serviços suportados
+firebase init hosting
+firebase init firestore
+firebase experiments:enable webframeworks
 
-# 4. Inicializar Next.js com templates do Studio
-firebase studio:template nextjs-enterprise
+# 4. Configurar Data Connect (Preview)
+firebase init dataconnect
+# Configure connectorId, localização e esquema conforme prompts
 ```
 
 ### 3.2. Estrutura Inicial Gerada pelo Firebase Studio
@@ -290,28 +306,29 @@ meu-projeto-enterprise/
 │   └── shared/
 │
 ├── lib/
+│   ├── __generated__/            # Tipos gerados automaticamente
+│   │   ├── firebase.ts           # Firestore + Data Connect
+│   │   └── graphql.ts
+│   ├── constants/
+│   │   ├── config.ts
+│   │   ├── permissions.ts
+│   │   └── routes.ts
 │   ├── firebase/
+│   │   ├── admin.ts              # Admin SDK (server)
 │   │   ├── config.ts             # Configuração cliente
-│   │   ├── data-connect.ts       # Cliente GraphQL
-│   │   └── admin.ts              # Admin SDK (server)
+│   │   └── data-connect.ts       # Cliente GraphQL/REST helpers
 │   ├── schemas/                  # Zod schemas
 │   │   ├── project.ts
-│   │   ├── user.ts
-│   │   └── data-connect.ts       # Tipos do Data Connect
+│   │   └── user.ts
 │   └── utils/
 │       ├── cn.ts
+│       ├── date.ts               # Helpers usando date-fns
 │       └── format.ts
 │
 ├── hooks/                        # Custom hooks
 │   ├── useAuth.ts
 │   ├── useDataConnect.ts         # Hook para GraphQL
 │   └── useProjects.ts
-│
-├── types/
-│   ├── models/
-│   │   ├── User.ts
-│   │   └── Project.ts
-│   └── graphql.ts                # Tipos GraphQL gerados
 │
 ├── firebase/                     # Configurações Firebase
 │   ├── data-connect/
@@ -325,15 +342,19 @@ meu-projeto-enterprise/
 ├── workers/                      # Cloudflare Workers
 │   └── api-gateway/
 │       ├── src/
-│       │   ├── index.ts
-│       │   ├── routes/
-│       │   │   ├── projects.ts
-│       │   │   └── auth.ts
+│       │   ├── handlers/         # Entry-points HTTP
+│       │   │   ├── auth.ts
+│       │   │   └── projects.ts
+│       │   ├── services/         # Lógica de negócio
+│       │   │   ├── cache.ts
+│       │   │   └── data-connect.ts
 │       │   ├── middleware/
+│       │   │   ├── cors.ts
 │       │   │   ├── jwt.ts
 │       │   │   └── rateLimit.ts
-│       │   └── utils/
-│       │       └── cache.ts
+│       │   ├── types/
+│       │   │   └── bindings.ts
+│       │   └── index.ts
 │       ├── wrangler.toml
 │       └── package.json
 │
@@ -396,33 +417,42 @@ input CreateProjectInput {
 
 **lib/firebase/data-connect.ts**
 ```typescript
-import { DataConnect } from '@firebase/data-connect';
+import { DataConnect, executeQuery, executeMutation } from '@firebase/data-connect';
 import { getApp } from 'firebase/app';
-import { 
-  CreateProjectMutation, 
-  GetProjectsQuery,
-  Project 
-} from '@/types/graphql';
+import { useQuery } from '@tanstack/react-query';
+import {
+  CreateProjectDocument,
+  GetProjectsDocument,
+  type ProjectStatus
+} from '@/lib/__generated__/graphql';
 
 export const dataConnect = new DataConnect(getApp(), {
   connector: 'enterprise-connector',
   location: 'us-central1'
 });
 
-// Hook personalizado para Data Connect
-export const useDataConnect = () => {
-  const { data, loading, error } = dataConnect.useQuery(GetProjectsQuery, {
-    variables: { status: 'ACTIVE' }
+export const useProjects = (status?: ProjectStatus) => {
+  return useQuery({
+    queryKey: ['projects', status],
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const result = await executeQuery(dataConnect, {
+        query: GetProjectsDocument,
+        variables: { status }
+      });
+
+      return result.data?.getProjects ?? [];
+    }
+  });
+};
+
+export const createProject = async (input: { name: string; description?: string }) => {
+  const result = await executeMutation(dataConnect, {
+    mutation: CreateProjectDocument,
+    variables: { input }
   });
 
-  const [createProject] = dataConnect.useMutation(CreateProjectMutation);
-
-  return {
-    projects: data?.getProjects || [],
-    loading,
-    error,
-    createProject
-  };
+  return result.data?.createProject;
 };
 ```
 
@@ -461,17 +491,15 @@ export default async function ProjectsPage() {
 
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { useDataConnect } from '@/hooks/useDataConnect';
+import type { Project } from '@/lib/__generated__/graphql';
+import { fetchProjectFromWorker } from '@/workers/api-gateway/src/services/data-connect';
 
 export function ProjectCard({ project }: { project: Project }) {
-  const { updateProject } = useDataConnect();
-
-  // Cache client-side para atualizações em tempo real
   const { data: projectData } = useQuery({
     queryKey: ['project', project.id],
-    queryFn: () => fetchProjectFromWorker(project.id),
     initialData: project,
-    refetchInterval: 30000, // Atualiza a cada 30s
+    refetchInterval: 30_000,
+    queryFn: () => fetchProjectFromWorker(project.id)
   });
 
   return (
@@ -525,6 +553,23 @@ export const FadeIn = ({
 );
 ```
 
+**lib/animations/variants.ts**
+```typescript
+export const fadeInUp = {
+  initial: { opacity: 0, y: 20 },
+  animate: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: -20 }
+};
+
+export const staggerContainer = {
+  animate: {
+    transition: {
+      staggerChildren: 0.1
+    }
+  }
+};
+```
+
 ### 6.2. Animações de Lista Otimizadas
 
 **app/(dashboard)/projects/components/ProjectList.tsx**
@@ -563,6 +608,28 @@ export function ProjectList({ projects }: ProjectListProps) {
 }
 ```
 
+### 6.3. Layouts com Transições Suaves
+
+**components/layout/AnimatedLayout.tsx**
+```tsx
+"use client";
+
+import { ReactNode } from 'react';
+import { motion } from 'framer-motion';
+
+interface AnimatedLayoutProps {
+  children: ReactNode;
+}
+
+export function AnimatedLayout({ children }: AnimatedLayoutProps) {
+  return (
+    <motion.div layout transition={{ type: 'spring', damping: 25, stiffness: 200 }}>
+      {children}
+    </motion.div>
+  );
+}
+```
+
 ---
 
 ## 7. ☁️ Arquitetura Edge (Cloudflare) {#7-cloudflare}
@@ -572,10 +639,10 @@ export function ProjectList({ projects }: ProjectListProps) {
 **workers/api-gateway/src/index.ts**
 ```typescript
 import { Hono } from 'hono';
-import { cors } from 'hono/cors';
 import { verifyJWT } from './middleware/jwt';
+import { corsMiddleware } from './middleware/cors';
 import { rateLimit } from './middleware/rateLimit';
-import { projectsRoute } from './routes/projects';
+import { projectsHandler } from './handlers/projects';
 
 type Bindings = {
   CACHE_KV: KVNamespace;
@@ -587,7 +654,7 @@ type Bindings = {
 const app = new Hono<{ Bindings: Bindings }>();
 
 // Middleware global
-app.use('*', cors());
+app.use('*', corsMiddleware);
 app.use('/api/*', verifyJWT);
 app.use('/api/*', rateLimit);
 
@@ -595,7 +662,7 @@ app.use('/api/*', rateLimit);
 app.get('/health', (c) => c.json({ status: 'ok', timestamp: Date.now() }));
 
 // Rotas de API
-app.route('/api/projects', projectsRoute);
+app.route('/api/projects', projectsHandler);
 
 // Fallback para Data Connect
 app.all('/data-connect/*', async (c) => {
@@ -605,44 +672,73 @@ app.all('/data-connect/*', async (c) => {
 export default app;
 ```
 
+**workers/api-gateway/src/middleware/cors.ts**
+```typescript
+import { cors } from 'hono/cors';
+import type { MiddlewareHandler } from 'hono';
+
+export const corsMiddleware: MiddlewareHandler = (c, next) => {
+  const allowedOrigins = c.env.ALLOWED_ORIGINS?.split(',') ?? ['*'];
+
+  return cors({
+    origin: allowedOrigins,
+    credentials: true,
+    allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    maxAge: 86_400
+  })(c, next);
+};
+```
+
 ### 7.2. Middleware de Autenticação JWT
 
 **workers/api-gateway/src/middleware/jwt.ts**
 ```typescript
-import { jwtVerify } from 'jose';
 import type { Context, Next } from 'hono';
+import { verifyIdToken } from '../services/firebase-admin';
 
 export async function verifyJWT(c: Context, next: Next) {
   const authHeader = c.req.header('Authorization');
-  
+
   if (!authHeader?.startsWith('Bearer ')) {
     return c.json({ error: 'Token não fornecido' }, 401);
   }
-  
+
   const token = authHeader.substring(7);
-  
+
   try {
-    // Verificar token do Firebase
-    const response = await fetch(
-      `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${c.env.FIREBASE_PROJECT_ID}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idToken: token })
-      }
-    );
-    
-    if (!response.ok) {
+    const decoded = await verifyIdToken(token);
+
+    if (!decoded) {
       throw new Error('Token inválido');
     }
-    
-    const { users } = await response.json();
-    c.set('user', users[0]);
-    
+
+    c.set('user', decoded);
     await next();
   } catch (error) {
+    console.error('JWT verification failed', error);
     return c.json({ error: 'Token inválido' }, 401);
   }
+}
+```
+
+**workers/api-gateway/src/services/firebase-admin.ts**
+```typescript
+import { initializeApp, cert, getApp, getApps } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
+
+const app = getApps().length
+  ? getApp()
+  : initializeApp({
+      credential: cert({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n')
+      })
+    });
+
+export async function verifyIdToken(token: string) {
+  const auth = getAuth(app);
+  return auth.verifyIdToken(token, true);
 }
 ```
 
@@ -657,32 +753,71 @@ export async function verifyJWT(c: Context, next: Next) {
 interface CacheOptions {
   ttl?: number; // seconds
   tags?: string[];
+  warmKeys?: string[];
 }
 
+type CacheMetrics = {
+  hits: number;
+  misses: number;
+};
+
 export class CacheService {
+  private metrics: CacheMetrics = { hits: 0, misses: 0 };
+
   constructor(private kv: KVNamespace) {}
 
   async get<T>(key: string): Promise<T | null> {
-    const value = await this.kv.get(key, 'json');
-    return value as T;
+    const value = await this.kv.get<T>(key, 'json');
+    if (value) {
+      this.metrics.hits += 1;
+    } else {
+      this.metrics.misses += 1;
+    }
+    return value;
   }
 
   async set<T>(key: string, value: T, options: CacheOptions = {}): Promise<void> {
     const { ttl = 300, tags = [] } = options;
-    
+
     await this.kv.put(key, JSON.stringify(value), {
       expirationTtl: ttl,
       metadata: { tags, createdAt: Date.now() }
     });
   }
 
-  async invalidate(tag: string): Promise<void> {
-    // Implementação de invalidação por tags
-    const list = await this.kv.list({ prefix: tag });
-    
-    for (const key of list.keys) {
-      await this.kv.delete(key.name);
-    }
+  async setMany<T>(entries: Array<{ key: string; value: T; options?: CacheOptions }>) {
+    await Promise.all(entries.map(({ key, value, options }) => this.set(key, value, options)));
+  }
+
+  async getOrSet<T>(key: string, fetcher: () => Promise<T>, options?: CacheOptions): Promise<T> {
+    const cached = await this.get<T>(key);
+    if (cached) return cached;
+
+    const fresh = await fetcher();
+    await this.set(key, fresh, options);
+    return fresh;
+  }
+
+  async warm(keys: string[], fetcher: (key: string) => Promise<unknown>, options?: CacheOptions) {
+    await Promise.all(
+      keys.map(async (key) => {
+        const value = await fetcher(key);
+        await this.set(key, value, options);
+      })
+    );
+  }
+
+  async invalidateByTags(tags: string[]): Promise<void> {
+    await Promise.all(
+      tags.map(async (tag) => {
+        const list = await this.kv.list({ prefix: tag });
+        await Promise.all(list.keys.map((key) => this.kv.delete(key.name)));
+      })
+    );
+  }
+
+  getMetrics(): CacheMetrics {
+    return { ...this.metrics };
   }
 }
 ```
@@ -691,44 +826,59 @@ export class CacheService {
 
 **workers/api-gateway/src/durableObjects/RateLimiter.ts**
 ```typescript
-export class RateLimiter {
-  private state: DurableObjectState;
+interface TokenBucketState {
+  tokens: number;
+  lastRefill: number;
+}
 
-  constructor(state: DurableObjectState) {
-    this.state = state;
+export class RateLimiter {
+  constructor(private state: DurableObjectState, private maxTokens = 120, private refillRate = 60) {}
+
+  private async getBucket(id: string): Promise<TokenBucketState> {
+    const stored = await this.state.storage.get<TokenBucketState>(id);
+    return (
+      stored ?? {
+        tokens: this.maxTokens,
+        lastRefill: Date.now()
+      }
+    );
+  }
+
+  private refill(bucket: TokenBucketState): TokenBucketState {
+    const now = Date.now();
+    const elapsed = (now - bucket.lastRefill) / 1000;
+    const tokensToAdd = elapsed * this.refillRate;
+
+    return {
+      tokens: Math.min(this.maxTokens, bucket.tokens + tokensToAdd),
+      lastRefill: now
+    };
   }
 
   async fetch(request: Request) {
     const userId = request.headers.get('user-id');
-    const now = Date.now();
-    const windowMs = 60 * 1000; // 1 minute
-    const maxRequests = 100;
 
     if (!userId) {
       return new Response('Unauthorized', { status: 401 });
     }
 
     const key = `rate_limit:${userId}`;
-    let data = await this.state.storage.get<{ count: number; resetTime: number }>(key);
+    let bucket = await this.getBucket(key);
+    bucket = this.refill(bucket);
 
-    if (!data || now > data.resetTime) {
-      data = { count: 0, resetTime: now + windowMs };
-    }
-
-    if (data.count >= maxRequests) {
-      return new Response('Rate limit exceeded', { 
+    if (bucket.tokens < 1) {
+      const retryAfter = Math.ceil((1 - bucket.tokens) / this.refillRate);
+      await this.state.storage.put(key, bucket);
+      return new Response('Rate limit exceeded', {
         status: 429,
-        headers: { 'Retry-After': Math.ceil((data.resetTime - now) / 1000).toString() }
+        headers: { 'Retry-After': retryAfter.toString() }
       });
     }
 
-    data.count++;
-    await this.state.storage.put(key, data);
+    bucket.tokens -= 1;
+    await this.state.storage.put(key, bucket);
 
-    return new Response(JSON.stringify({ 
-      count: data.count, 
-      resetTime: data.resetTime 
-    }), {
+    return new Response(JSON.stringify({ tokens: bucket.tokens }), {
       headers: { 'Content-Type': 'application/json' }
     });
   }
@@ -782,34 +932,20 @@ query GetProjects($status: ProjectStatus) {
 
 **hooks/useDataConnect.ts**
 ```typescript
-import { useQuery, useMutation } from '@tanstack/react-query';
-import { dataConnect } from '@/lib/firebase/data-connect';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { createProject, useProjects } from '@/lib/firebase/data-connect';
+import type { ProjectStatus } from '@/lib/__generated__/graphql';
 
-export const useProjects = (status?: string) => {
-  return useQuery({
-    queryKey: ['projects', status],
-    queryFn: async () => {
-      const result = await dataConnect.execute(GetProjectsQuery, {
-        variables: { status }
-      });
-      return result.data?.getProjects || [];
-    },
-    staleTime: 5 * 60 * 1000, // 5 minutos
-  });
-};
+export const useProjectsList = (status?: ProjectStatus) => useProjects(status);
 
 export const useCreateProject = () => {
+  const queryClient = useQueryClient();
+
   return useMutation({
-    mutationFn: async (input: CreateProjectInput) => {
-      const result = await dataConnect.execute(CreateProjectMutation, {
-        variables: { input }
-      });
-      return result.data?.createProject;
-    },
+    mutationFn: createProject,
     onSuccess: () => {
-      // Invalidar cache relevante
       queryClient.invalidateQueries({ queryKey: ['projects'] });
-    },
+    }
   });
 };
 ```
@@ -825,24 +961,31 @@ export const useCreateProject = () => {
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Users can only access their own data
-    match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    function isSignedIn() {
+      return request.auth != null;
     }
-    
-    // Projects: team-based access
+
     match /projects/{projectId} {
-      allow read, write: if request.auth != null && 
-        exists(/databases/$(database)/documents/projects/$(projectId)/team/$(request.auth.uid));
-      
-      allow create: if request.auth != null &&
-        request.auth.token.firebase.sign_in_provider != 'anonymous';
-    }
-    
-    // Admin access
-    match /admin/{document} {
-      allow read, write: if request.auth != null && 
-        request.auth.token.admin == true;
+      allow read: if isSignedIn();
+
+      allow create: if isSignedIn() &&
+        request.resource.data.keys().hasAll(['name', 'status', 'createdBy', 'createdAt']) &&
+        request.resource.data.name is string &&
+        request.resource.data.name.size() > 0 &&
+        request.resource.data.name.size() <= 100 &&
+        request.resource.data.status in ['ACTIVE', 'COMPLETED', 'ARCHIVED'] &&
+        request.resource.data.createdBy == request.auth.uid;
+
+      allow update: if isSignedIn() &&
+        request.auth.uid == resource.data.createdBy &&
+        request.resource.data.keys().hasOnly(['name', 'description', 'status', 'updatedAt']) &&
+        request.resource.data.name is string &&
+        request.resource.data.name.size() > 0 &&
+        request.resource.data.name.size() <= 100 &&
+        request.resource.data.status in ['ACTIVE', 'COMPLETED', 'ARCHIVED'] &&
+        request.time > resource.data.updatedAt + duration.value(1, 's');
+
+      allow delete: if request.auth != null && request.auth.token.admin == true;
     }
   }
 }
@@ -852,21 +995,40 @@ service cloud.firestore {
 
 **lib/schemas/project.ts**
 ```typescript
+import { addDays } from 'date-fns';
 import { z } from 'zod';
 
-export const projectSchema = z.object({
-  name: z.string().min(1).max(100),
-  description: z.string().max(500).optional(),
-  status: z.enum(['ACTIVE', 'COMPLETED', 'ARCHIVED']),
-  deadline: z.date().min(new Date()),
-  budget: z.number().min(0).optional(),
-});
+export const projectSchema = z
+  .object({
+    name: z
+      .string()
+      .min(1, 'Nome é obrigatório')
+      .max(100, 'Nome muito longo')
+      .transform((val) => val.trim()),
 
-export const createProjectSchema = projectSchema.extend({
-  teamMembers: z.array(z.string()).min(1, 'Projeto precisa de pelo menos 1 membro'),
-});
+    email: z
+      .string()
+      .email('Email inválido')
+      .transform((val) => val.toLowerCase()),
 
-export type ProjectFormData = z.infer<typeof createProjectSchema>;
+    deadline: z
+      .coerce.date()
+      .min(new Date(), 'Data não pode ser no passado'),
+
+    budget: z
+      .number()
+      .positive('Orçamento deve ser positivo')
+      .optional()
+      .transform((val) => (val ? Math.round(val * 100) / 100 : undefined)),
+
+    status: z.enum(['ACTIVE', 'COMPLETED', 'ARCHIVED']).default('ACTIVE')
+  })
+  .refine((data) => data.deadline > addDays(new Date(), 1), {
+    message: 'Prazo deve ser pelo menos amanhã',
+    path: ['deadline']
+  });
+
+export type ProjectFormData = z.infer<typeof projectSchema>;
 ```
 
 ---
@@ -879,23 +1041,25 @@ export type ProjectFormData = z.infer<typeof createProjectSchema>;
 ```tsx
 "use client";
 
+import { addDays } from 'date-fns';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { createProjectSchema, type ProjectFormData } from '@/lib/schemas/project';
+import { projectSchema, type ProjectFormData } from '@/lib/schemas/project';
 import { useCreateProject } from '@/hooks/useDataConnect';
 
 export function CreateProjectForm() {
   const createProject = useCreateProject();
-  
+
   const {
     register,
     handleSubmit,
     formState: { errors },
     reset
   } = useForm<ProjectFormData>({
-    resolver: zodResolver(createProjectSchema),
+    resolver: zodResolver(projectSchema),
     defaultValues: {
-      status: 'ACTIVE'
+      status: 'ACTIVE',
+      deadline: addDays(new Date(), 2).toISOString().split('T')[0] as unknown as Date
     }
   });
 
@@ -925,14 +1089,46 @@ export function CreateProjectForm() {
       </div>
 
       <div>
-        <label htmlFor="description" className="block text-sm font-medium">
-          Descrição
+        <label htmlFor="email" className="block text-sm font-medium">
+          Email do Responsável
         </label>
-        <textarea
-          {...register('description')}
-          rows={3}
+        <input
+          type="email"
+          {...register('email')}
           className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2"
         />
+        {errors.email && (
+          <p className="text-red-500 text-sm mt-1">{errors.email.message}</p>
+        )}
+      </div>
+
+      <div>
+        <label htmlFor="deadline" className="block text-sm font-medium">
+          Prazo
+        </label>
+        <input
+          type="date"
+          {...register('deadline')}
+          className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2"
+        />
+        {errors.deadline && (
+          <p className="text-red-500 text-sm mt-1">{errors.deadline.message}</p>
+        )}
+      </div>
+
+      <div>
+        <label htmlFor="budget" className="block text-sm font-medium">
+          Orçamento (R$)
+        </label>
+        <input
+          type="number"
+          step="0.01"
+          {...register('budget')}
+          className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2"
+        />
+        {errors.budget && (
+          <p className="text-red-500 text-sm mt-1">{errors.budget.message}</p>
+        )}
       </div>
 
       <button
@@ -956,50 +1152,70 @@ export function CreateProjectForm() {
 **store/uiStore.ts**
 ```typescript
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { devtools, persist } from 'zustand/middleware';
 
 interface UIStore {
-  // Sidebar state
   sidebarOpen: boolean;
   toggleSidebar: () => void;
-  
-  // Theme
   theme: 'light' | 'dark';
   setTheme: (theme: 'light' | 'dark') => void;
-  
-  // Notifications
   notifications: Notification[];
   addNotification: (notification: Omit<Notification, 'id' | 'timestamp'>) => void;
   removeNotification: (id: string) => void;
 }
 
 export const useUIStore = create<UIStore>()(
-  persist(
-    (set, get) => ({
-      sidebarOpen: true,
-      toggleSidebar: () => set({ sidebarOpen: !get().sidebarOpen }),
-      
-      theme: 'light',
-      setTheme: (theme) => set({ theme }),
-      
-      notifications: [],
-      addNotification: (notification) => set((state) => ({
-        notifications: [
-          ...state.notifications,
-          {
-            ...notification,
-            id: Math.random().toString(36),
-            timestamp: Date.now()
-          }
-        ]
-      })),
-      removeNotification: (id) => set((state) => ({
-        notifications: state.notifications.filter(n => n.id !== id)
-      }))
+  devtools(
+    persist(
+      (set, get) => ({
+        sidebarOpen: true,
+        toggleSidebar: () => set({ sidebarOpen: !get().sidebarOpen }),
+        theme: 'light',
+        setTheme: (theme) => set({ theme }),
+        notifications: [],
+        addNotification: (notification) =>
+          set((state) => ({
+            notifications: [
+              ...state.notifications,
+              {
+                ...notification,
+                id: crypto.randomUUID(),
+                timestamp: Date.now()
+              }
+            ]
+          })),
+        removeNotification: (id) =>
+          set((state) => ({
+            notifications: state.notifications.filter((n) => n.id !== id)
+          }))
+      }),
+      { name: 'ui-storage' }
+    ),
+    { name: 'UIStore' }
+  )
+);
+
+interface DataStore {
+  projects: Project[];
+  setProjects: (projects: Project[]) => void;
+  addProject: (project: Project) => void;
+  updateProject: (id: string, updates: Partial<Project>) => void;
+}
+
+export const useDataStore = create<DataStore>()(
+  devtools(
+    (set) => ({
+      projects: [],
+      setProjects: (projects) => set({ projects }),
+      addProject: (project) => set((state) => ({ projects: [...state.projects, project] })),
+      updateProject: (id, updates) =>
+        set((state) => ({
+          projects: state.projects.map((project) =>
+            project.id === id ? { ...project, ...updates } : project
+          )
+        }))
     }),
-    {
-      name: 'ui-storage'
-    }
+    { name: 'DataStore' }
   )
 );
 ```
@@ -1015,10 +1231,11 @@ export const useUIStore = create<UIStore>()(
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { CreateProjectForm } from '@/app/(dashboard)/projects/components/CreateProjectForm';
 
-// Mock do hook
+const mutateAsync = jest.fn().mockResolvedValue({ id: '123' });
+
 jest.mock('@/hooks/useDataConnect', () => ({
   useCreateProject: () => ({
-    mutateAsync: jest.fn().mockResolvedValue({ id: '123' }),
+    mutateAsync,
     isPending: false
   })
 }));
@@ -1028,15 +1245,86 @@ describe('CreateProjectForm', () => {
     render(<CreateProjectForm />);
     
     fireEvent.input(screen.getByLabelText(/nome do projeto/i), {
-      target: { value: 'Novo Projeto' }
+      target: { value: '  Novo Projeto  ' }
     });
-    
+
+    fireEvent.input(screen.getByLabelText(/email do responsável/i), {
+      target: { value: 'OWNER@EXAMPLE.COM' }
+    });
+
+    fireEvent.input(screen.getByLabelText(/prazo/i), {
+      target: { value: '2030-01-01' }
+    });
+
     fireEvent.click(screen.getByText(/criar projeto/i));
-    
+
     await waitFor(() => {
-      expect(screen.getByText(/projeto criado com sucesso/i)).toBeInTheDocument();
+      expect(mutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'Novo Projeto',
+          email: 'owner@example.com'
+        })
+      );
     });
   });
+});
+```
+
+### 13.2. Testes de Integração com Firebase Emulator
+
+**tests/firebase/projects.test.ts**
+```typescript
+import { initializeTestEnvironment } from '@firebase/rules-unit-testing';
+import { addDoc, collection, getDoc, getFirestore } from 'firebase/firestore';
+
+let testEnv: Awaited<ReturnType<typeof initializeTestEnvironment>>;
+
+beforeAll(async () => {
+  process.env.FIRESTORE_EMULATOR_HOST = 'localhost:8080';
+  testEnv = await initializeTestEnvironment({
+    projectId: 'demo-project',
+    firestore: {
+      host: 'localhost',
+      port: 8080
+    }
+  });
+});
+
+afterAll(async () => {
+  await testEnv.cleanup();
+});
+
+it('creates project in Firestore', async () => {
+  const context = testEnv.authenticatedContext('user-123');
+  const db = getFirestore(context.firestore());
+
+  const projectRef = await addDoc(collection(db, 'projects'), {
+    name: 'Test Project',
+    status: 'ACTIVE',
+    createdBy: 'user-123',
+    createdAt: new Date().toISOString()
+  });
+
+  const snapshot = await getDoc(projectRef);
+  expect(snapshot.exists()).toBe(true);
+});
+```
+
+### 13.3. Testes End-to-End com Playwright
+
+**tests/e2e/projects.spec.ts**
+```typescript
+import { expect, test } from '@playwright/test';
+
+test('user can create project', async ({ page }) => {
+  await page.goto('/projects');
+  await page.click('text=Novo Projeto');
+  await page.fill('[name="name"]', 'My Project');
+  await page.fill('[name="email"]', 'owner@example.com');
+  await page.fill('[name="deadline"]', '2030-01-01');
+  await page.click('text=Criar Projeto');
+
+  await expect(page.getByText('My Project')).toBeVisible();
 });
 ```
 
@@ -1048,8 +1336,11 @@ describe('CreateProjectForm', () => {
 
 **lib/utils/logger.ts**
 ```typescript
+import { logEvent } from 'firebase/analytics';
+import { analytics } from '@/lib/firebase/config';
+
 interface LogEntry {
-  level: 'info' | 'warn' | 'error';
+  level: 'debug' | 'info' | 'warn' | 'error';
   message: string;
   timestamp: string;
   userId?: string;
@@ -1058,15 +1349,50 @@ interface LogEntry {
 }
 
 export class Logger {
+  private static buffer: LogEntry[] = [];
+
+  private static shouldSample() {
+    const rate = Number(process.env.LOG_SAMPLE_RATE ?? 1);
+    return Math.random() < rate;
+  }
+
+  static debug(message: string, metadata?: Record<string, any>) {
+    if (process.env.NODE_ENV === 'development') {
+      this.log('debug', message, metadata);
+    }
+  }
+
   static info(message: string, metadata?: Record<string, any>) {
     this.log('info', message, metadata);
+  }
+
+  static warn(message: string, metadata?: Record<string, any>) {
+    this.log('warn', message, metadata);
   }
 
   static error(message: string, error?: Error, metadata?: Record<string, any>) {
     this.log('error', message, { ...metadata, error: error?.message, stack: error?.stack });
   }
 
+  static trackEvent(eventName: string, params?: Record<string, any>) {
+    logEvent(analytics, eventName, params);
+  }
+
+  static async flush() {
+    if (!this.buffer.length) return;
+    const payload = [...this.buffer];
+    this.buffer.length = 0;
+
+    await fetch('/api/logs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+  }
+
   private static log(level: LogEntry['level'], message: string, metadata?: Record<string, any>) {
+    if (!this.shouldSample()) return;
+
     const entry: LogEntry = {
       level,
       message,
@@ -1074,21 +1400,14 @@ export class Logger {
       metadata
     };
 
-    // Enviar para serviço de logging
     if (process.env.NODE_ENV === 'production') {
-      this.sendToLogService(entry);
+      this.buffer.push(entry);
+      if (this.buffer.length >= 20) {
+        void this.flush();
+      }
     } else {
       console[level](entry);
     }
-  }
-
-  private static sendToLogService(entry: LogEntry) {
-    // Integração com Firebase Crashlytics ou serviço similar
-    fetch('/api/logs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(entry)
-    });
   }
 }
 ```
@@ -1139,6 +1458,8 @@ name: Deploy to Firebase
 on:
   push:
     branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
   deploy:
@@ -1158,11 +1479,29 @@ jobs:
     
     - name: Run tests
       run: npm run test:unit
-    
+
+    - name: Check bundle size
+      run: npx @next/bundle-analyzer
+
+    - name: Lighthouse CI
+      run: |
+        npm install -g @lhci/cli
+        lhci autorun
+
+    - name: Security audit
+      run: npm audit --production --audit-level=high
+
     - name: Build application
       run: npm run build
     
+    - name: Deploy preview (PRs)
+      if: github.event_name == 'pull_request'
+      run: firebase hosting:channel:deploy pr-${{ github.event.number }}
+      env:
+        FIREBASE_TOKEN: ${{ secrets.FIREBASE_CI_TOKEN }}
+
     - name: Deploy to Firebase
+      if: github.event_name == 'push'
       uses: FirebaseExtended/action-hosting-deploy@v0
       with:
         repoToken: '${{ secrets.GITHUB_TOKEN }}'
@@ -1241,20 +1580,43 @@ npm update
 ### 19.1. Estratégia de Cache Híbrido
 
 ```typescript
-// Exemplo de camadas de cache
-export const getProjectsWithCache = async (userId: string) => {
-  // 1. Cache do Worker (Edge - ~10ms)
-  const cached = await cache.get(`projects:${userId}`);
-  if (cached) return cached;
+export async function preloadCache(userId: string) {
+  const criticalData = await Promise.all([
+    fetchProjects(userId),
+    fetchUserProfile(userId),
+    fetchNotifications(userId)
+  ]);
 
-  // 2. Data Connect (Firebase - ~200ms)
-  const projects = await dataConnect.execute(GetProjectsQuery);
-  
-  // 3. Salvar no cache
-  await cache.set(`projects:${userId}`, projects, { ttl: 300 });
-  
-  return projects;
-};
+  await cache.setMany([
+    { key: `projects:${userId}`, value: criticalData[0], options: { ttl: 300, tags: ['projects'] } },
+    { key: `profile:${userId}`, value: criticalData[1], options: { ttl: 600, tags: ['users'] } },
+    { key: `notifications:${userId}`, value: criticalData[2], options: { ttl: 120, tags: ['notifications'] } }
+  ]);
+}
+
+export async function getCachedWithSWR<T>(
+  key: string,
+  fetcher: () => Promise<T>,
+  ttl: number
+): Promise<T> {
+  const cached = await cache.get<{ payload: T; timestamp: number }>(key);
+
+  if (cached) {
+    const age = Date.now() - cached.timestamp;
+
+    if (age > ttl / 2) {
+      void fetcher().then(async (fresh) => {
+        await cache.set(key, { payload: fresh, timestamp: Date.now() }, { ttl });
+      });
+    }
+
+    return cached.payload;
+  }
+
+  const fresh = await fetcher();
+  await cache.set(key, { payload: fresh, timestamp: Date.now() }, { ttl });
+  return fresh;
+}
 ```
 
 ---
