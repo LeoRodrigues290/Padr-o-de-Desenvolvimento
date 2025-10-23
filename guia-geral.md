@@ -30,6 +30,11 @@
 20. [📈 Auditoria e Observabilidade](#20-auditoria)
 21. [🧾 Checklist Diário de Desenvolvimento](#21-checklist)
 22. [🐞 Troubleshooting & Debugging](#22-troubleshooting)
+23. [🔄 Guias de Migração](#23-migracao)
+24. [📚 Glossário Essencial](#24-glossario)
+25. [💰 Estimativas de Custos](#25-custos)
+26. [🛣️ Roadmap de Evolução](#26-roadmap)
+27. [🎯 Prioridades de Implementação](#27-prioridades)
 
 ---
 
@@ -1672,11 +1677,79 @@ export const trackPerformance = async (metric: string, duration: number) => {
 
 ### Problemas Comuns e Soluções
 
-| Problema | Causa | Solução |
-|----------|-------|---------|
-| Data Connect não responde | Schema inválido | Verificar `connector.yaml` |
-| Cache não funcionando | TTL muito curto | Aumentar TTL ou verificar chaves |
-| Worker com timeout | Query muito lenta | Otimizar query ou adicionar cache |
+| Problema | Sinais | Solução Recomendada |
+|----------|--------|---------------------|
+| **Data Connect timeout** | Queries acima de 10s, streaming não inicia | Usar `executeQuery` com `signal`, revisar índices, ativar streaming em Server Components e reduzir payload com filtros/`limit`. |
+| **Cache invalidation não funcionando** | Dados obsoletos após deploy | Validar tags utilizadas no `CacheService`, executar `invalidateTags` pós-deploy e acionar `queryClient.invalidateQueries` nas mutações. |
+| **Rate limiting agressivo** | Usuários legítimos bloqueados | Ajustar parâmetros do Token Bucket, separar buckets por rota e registrar métricas de consumo no Logger. |
+| **Build failures no Firebase Hosting** | `npm run build` quebra no CI | Verificar `firebase experiments:enable webframeworks`, sincronizar versões do Next.js e limpar caches antes do deploy (`firebase hosting:channel:deploy`). |
+| **CORS issues no Cloudflare Worker** | Requisições 403 ou bloqueios no navegador | Conferir lista de origens permitidas, habilitar preflight `OPTIONS` e adicionar headers dinâmicos por ambiente no middleware. |
+
+---
+
+## 23. 🔄 Guias de Migração {#23-migracao}
+
+- **Vercel ➜ Firebase Studio:** habilite `firebase init hosting` + `firebase experiments:enable webframeworks`, replique secrets com `firebase env:set` e configure Cloudflare Workers via `firebase init dataconnect` + `wrangler` para rotas edge.
+- **REST ➜ GraphQL (Data Connect):** converta rotas REST em resolvers declarativos, gere tipos em `lib/__generated__/graphql.ts`, substitua chamadas `fetch` por `executeQuery`/`executeMutation` e aproveite invalidation do TanStack Query.
+- **Redux Toolkit ➜ Zustand:** mapeie slices existentes, crie stores com `devtools` + `persist`, substitua `useSelector` por hooks customizados e utilize middlewares para sincronizar com caches locais.
+- **styled-components ➜ Tailwind + cva:** migre tokens para `tailwind.config.js`, use `clsx/cva` para variantes, remova estilos globais e utilize `@apply` apenas em camadas base.
+
+---
+
+## 24. 📚 Glossário Essencial {#24-glossario}
+
+- **Data Connect:** camada GraphQL gerenciada do Firebase com schema tipado e integrações automáticas.
+- **Durable Objects:** instâncias stateful distribuídas na edge Cloudflare para coordenação consistente.
+- **KV Namespace:** armazenamento chave-valor distribuído utilizado para cache quente e configurações.
+- **Edge Computing:** execução de código próxima ao usuário final reduzindo latência perceptível.
+- **Hydration:** processo de anexar eventos client-side a markup server-renderizada, essencial para interatividade.
+
+---
+
+## 25. 💰 Estimativas de Custos {#25-custos}
+
+| Serviço | Faixa Gratuita | Custo Estimado Mensal* |
+|---------|----------------|------------------------|
+| Firebase Firestore | 1 GiB storage / 50K leituras | USD 25-80 (workloads médias) |
+| Firebase Hosting | 10 GB transferência | USD 0-20 conforme tráfego |
+| Firebase Authentication | 10K verificações | USD 0-15 dependendo de MFA/SMS |
+| Cloudflare Workers | 100K execuções | USD 5-50 (plano Workers Paid) |
+| Cloudflare KV + Durable Objects | 1 GB storage | USD 5-40 conforme operações |
+
+> *Valores indicativos. Monitorar dashboards oficiais e configurar alertas de budget.
+
+---
+
+## 26. 🛣️ Roadmap de Evolução {#26-roadmap}
+
+1. **Suporte i18n completo** via `next-intl` e sync de traduções no Firebase Studio.
+2. **PWA & Offline-first** com service workers customizados e caching inteligente no Cloudflare.
+3. **Observabilidade avançada** integrando OpenTelemetry + Firebase Monitoring.
+4. **Real-time collaboration** usando Durable Objects e presence channels.
+5. **Automação de governança de custos** com alertas e dashboards unificados.
+
+---
+
+## 27. 🎯 Prioridades de Implementação {#27-prioridades}
+
+### Alta Prioridade (Imediata)
+- Corrigir hooks Data Connect (React Query) e garantir invalidação automática.
+- Endurecer verificação JWT nos Workers com Firebase Admin ou JWKS.
+- Introduzir error boundaries, suspense boundaries e skeletons padronizados.
+- Implementar logging estruturado com sampling + exportação para BigQuery.
+- Configurar suite de testes com Firebase Emulator + Playwright.
+
+### Média Prioridade
+- Adotar container queries em dashboards críticos.
+- Implementar cache `getCachedWithSWR` e pré-aquecimento (`preloadCache`).
+- Substituir rate limiting simples por Token Bucket distribuído.
+- Adicionar bundle e Lighthouse CI no pipeline (`@next/bundle-analyzer`, `lhci`).
+- Expandir biblioteca de componentes (`AnimatedLayout`, cards compostos, tabelas avançadas).
+
+### Baixa Prioridade
+- Publicar documentação de API GraphQL e REST decompatibilização.
+- Criar guias de migração avançados (monorepo, turborepo, multi-região).
+- Automatizar análise de custos com integrações externas (Cloudflare/BigQuery).
 
 ---
 
