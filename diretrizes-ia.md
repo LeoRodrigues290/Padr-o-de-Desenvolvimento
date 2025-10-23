@@ -27,6 +27,20 @@ interface IADirectives {
 - **VALIDAR** responsividade em todos os breakpoints
 - **MODULARIZAR** código em arquivos especializados
 
+### 1.3. Renderização, Mídia e Loading States
+- **Server Components por padrão:** execute data fetching intensivo, autenticação e composição de layout em componentes Server. Migre para Client Components apenas quando precisar de interatividade (eventos, estado local complexo ou APIs do navegador).
+- **Client Components com parcimônia:** use `'use client'` somente em árvores que realmente dependam de hooks de efeito, estado ou bibliotecas third-party que exigem o navegador.
+- **Imagens otimizadas com `next/image`:** habilite `fill` ou `sizes` adequados, defina `priority` para herói acima da dobra, utilize `placeholder="blur"` para imagens críticas e hospede assets preferencialmente em domínios confiáveis registrados em `next.config.js`.
+- **Loading states consistentes:** padronize skeletons e suspense boundaries para evitar layout shifts.
+
+```typescript
+interface LoadingStates {
+  skeleton: "PREFER over spinners";
+  suspense: "USE for data fetching";
+  streaming: "ENABLE for large datasets";
+}
+```
+
 ---
 
 ## 🏗️ ARQUITETURA E ESTRUTURA
@@ -120,33 +134,89 @@ const ResponsiveLayout = () => (
 );
 ```
 
+```tsx
+// ✅ GRID COMPLEXO E RESPONSIVO
+const ResponsiveGrid = () => (
+  <div
+    className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-8"
+  >
+    {/* Items dinâmicos */}
+  </div>
+);
+```
+
+```tsx
+// ✅ GRID COM ÁREAS NOMEADAS (CSS customizado)
+const NamedAreasLayout = () => (
+  <div className="grid-layout">
+    <header className="area-header">Header</header>
+    <nav className="area-nav">Nav</nav>
+    <main className="area-main">Main</main>
+    <aside className="area-aside">Aside</aside>
+    <footer className="area-footer">Footer</footer>
+  </div>
+);
+```
+
+```css
+.grid-layout {
+  display: grid;
+  gap: 1rem;
+  grid-template-areas:
+    'header'
+    'nav'
+    'main'
+    'aside'
+    'footer';
+}
+
+@media (min-width: 768px) {
+  .grid-layout {
+    grid-template-columns: 240px 1fr;
+    grid-template-areas:
+      'header header'
+      'nav main'
+      'aside main'
+      'footer footer';
+  }
+}
+
+@media (min-width: 1280px) {
+  .grid-layout {
+    grid-template-columns: 240px 1fr 320px;
+    grid-template-areas:
+      'header header header'
+      'nav main aside'
+      'footer footer footer';
+  }
+}
+```
+
 ### 3.3. Classes Tailwind Organizadas
 ```tsx
-// ✅ ESTRUTURA CORRETA DE CLASSES
-const Button = () => (
-  <button
-    className={`
-      // Layout
-      inline-flex items-center justify-center
-      
-      // Spacing  
-      px-4 py-2
-      
-      // Typography
-      text-sm font-medium
-      
-      // Colors
-      text-white bg-blue-600
-      
-      // States
-      hover:bg-blue-700 focus:outline-none focus:ring-2
-      
-      // Responsive
-      md:px-6 md:text-base
-    `}
-  >
-    Action
-  </button>
+// ✅ VARIANTES COM `cva`
+import { cva } from 'class-variance-authority';
+
+export const buttonVariants = cva(
+  'inline-flex items-center justify-center rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500',
+  {
+    variants: {
+      variant: {
+        primary: 'bg-blue-600 text-white hover:bg-blue-700',
+        secondary: 'bg-gray-200 text-gray-900 hover:bg-gray-300',
+        ghost: 'hover:bg-gray-100 text-gray-900'
+      },
+      size: {
+        sm: 'px-3 py-1.5 text-sm',
+        md: 'px-4 py-2 text-base',
+        lg: 'px-6 py-3 text-lg'
+      }
+    },
+    defaultVariants: {
+      variant: 'primary',
+      size: 'md'
+    }
+  }
 );
 ```
 
@@ -204,6 +274,32 @@ export function FormComponent() {
 }
 ```
 
+### 4.3. Composition Pattern
+```tsx
+// ✅ COMPONENTES COMPOSTOS
+interface CardProps {
+  children: React.ReactNode;
+}
+
+export function Card({ children }: CardProps) {
+  return <div className="card">{children}</div>;
+}
+
+Card.Header = function CardHeader({ children }: CardProps) {
+  return <div className="card-header">{children}</div>;
+};
+
+Card.Body = function CardBody({ children }: CardProps) {
+  return <div className="card-body">{children}</div>;
+};
+
+// Uso
+<Card>
+  <Card.Header>Title</Card.Header>
+  <Card.Body>Content</Card.Body>
+</Card>;
+```
+
 ---
 
 ## 🔥 FIREBASE DATA CONNECT
@@ -232,23 +328,53 @@ input CreateProjectInput {
 }
 ```
 
-### 5.2. Hooks para Data Connect
+### 5.2. Hooks com React Query
 ```tsx
 'use client'
 
+import { useQuery } from '@tanstack/react-query';
+import { executeQuery } from '@firebase/data-connect';
+
 // ✅ Hook customizado para Data Connect
-export function useProjects() {
-  const { data, loading, error } = useQuery(GetProjectsQuery, {
-    variables: { status: 'ACTIVE' }
-  })
+export function useProjects(status?: ProjectStatus) {
+  return useQuery({
+    queryKey: ['projects', status],
+    queryFn: async () => {
+      const result = await executeQuery(dataConnect, {
+        query: GET_PROJECTS,
+        variables: { status }
+      });
 
-  const [createProject] = useMutation(CreateProjectMutation)
+      return result.data.projects;
+    },
+    staleTime: 5 * 60 * 1000
+  });
+}
+```
 
-  return {
-    projects: data?.getProjects || [],
-    loading,
-    createProject
-  }
+### 5.3. Mutations com Invalidação Inteligente
+```tsx
+'use client'
+
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { executeMutation } from '@firebase/data-connect';
+
+export function useCreateProject() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: CreateProjectInput) => {
+      const result = await executeMutation(dataConnect, {
+        mutation: CREATE_PROJECT,
+        variables: { input }
+      });
+
+      return result.data.createProject;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+    }
+  });
 }
 ```
 
@@ -305,53 +431,59 @@ const AccessibleComponent = () => (
 )
 ```
 
+### 6.3. Container Queries
+```tsx
+// ✅ ADAPTAR CONTEÚDO AO CONTÊINER
+const ContainerAwareGrid = () => (
+  <div className="@container">
+    <div className="grid grid-cols-1 gap-4 @sm:grid-cols-2 @md:grid-cols-3 @lg:grid-cols-4">
+      {/* Items dinâmicos */}
+    </div>
+  </div>
+);
+```
+
 ---
 
 ## 🧩 PADRÕES DE COMPONENTES
 
 ### 7.1. Componente Base
 ```tsx
-// ✅ Componente bem estruturado
+// ✅ Componente bem estruturado com loading e ícones
+import { buttonVariants } from '@/components/ui/button-variants';
+
 interface ButtonProps {
-  variant?: 'primary' | 'secondary'
-  size?: 'sm' | 'md' | 'lg'
-  children: React.ReactNode
-  onClick?: () => void
+  variant?: 'primary' | 'secondary' | 'ghost';
+  size?: 'sm' | 'md' | 'lg';
+  loading?: boolean;
+  disabled?: boolean;
+  leftIcon?: React.ReactNode;
+  rightIcon?: React.ReactNode;
+  children: React.ReactNode;
+  onClick?: () => void;
 }
 
-export function Button({ 
+export function Button({
   variant = 'primary',
   size = 'md',
+  loading,
+  disabled,
+  leftIcon,
+  rightIcon,
   children,
-  onClick 
+  ...rest
 }: ButtonProps) {
-  const baseStyles = 'inline-flex items-center justify-center font-medium'
-  
-  const variants = {
-    primary: 'bg-blue-600 text-white hover:bg-blue-700',
-    secondary: 'bg-gray-200 text-gray-900 hover:bg-gray-300'
-  }
-  
-  const sizes = {
-    sm: 'px-3 py-1.5 text-sm',
-    md: 'px-4 py-2 text-base',
-    lg: 'px-6 py-3 text-lg'
-  }
-
   return (
     <button
-      className={`
-        ${baseStyles}
-        ${variants[variant]}
-        ${sizes[size]}
-        rounded-lg transition-colors
-        focus:outline-none focus:ring-2 focus:ring-blue-500
-      `}
-      onClick={onClick}
+      {...rest}
+      disabled={disabled || loading}
+      className={buttonVariants({ variant, size })}
     >
-      {children}
+      {loading ? <Spinner className="mr-2 h-4 w-4" /> : leftIcon}
+      <span className="mx-1">{children}</span>
+      {!loading && rightIcon}
     </button>
-  )
+  );
 }
 ```
 
@@ -431,6 +563,42 @@ export function Card({ title, children, actions }: CardProps) {
 </div>
 ```
 
+### 8.3. Fluxos de Estado Problemáticos
+```tsx
+// ❌ PROIBIDO - Prop drilling excessivo
+function Parent() {
+  const [state, setState] = useState();
+  return <Child state={state} setState={setState} />;
+}
+
+function Child({ state, setState }) {
+  return <GrandChild state={state} setState={setState} />;
+}
+
+// ✅ PREFERIR - Context ou Store
+const StateContext = createContext();
+
+function Parent() {
+  const [state, setState] = useState();
+  return (
+    <StateContext.Provider value={{ state, setState }}>
+      <Child />
+    </StateContext.Provider>
+  );
+}
+
+// ❌ PROIBIDO - useEffect desnecessário
+useEffect(() => {
+  setFilteredData(data.filter((item) => item.active));
+}, [data]);
+
+// ✅ PREFERIR - Computação direta
+const filteredData = useMemo(
+  () => data.filter((item) => item.active),
+  [data]
+);
+```
+
 ---
 
 ## ✅ CHECKLIST DE VALIDAÇÃO
@@ -443,6 +611,11 @@ export function Card({ title, children, actions }: CardProps) {
 - [ ] **Performance**: Evitado re-renders desnecessários?
 - [ ] **Tipagem**: TypeScript interfaces definidas?
 - [ ] **Manutenibilidade**: Código é fácil de entender?
+- [ ] **Imagens**: Componentes críticos usam `next/image` com otimização?
+- [ ] **Fonts**: `next/font` configurado para reduzir layout shift?
+- [ ] **SEO**: Meta tags, Open Graph e dados estruturados revisados?
+- [ ] **Analytics**: Eventos essenciais registrados no Logger/Analytics?
+- [ ] **Error/Suspense Boundaries**: Presentes em componentes críticos?
 
 ### 9.2. Padrões de Qualidade
 ```typescript
@@ -471,6 +644,71 @@ interface QualityChecklist {
 ```
 
 ---
+
+## 🔧 Troubleshooting Expandido
+
+| Problema | Sinais | Solução Recomendada |
+|----------|--------|---------------------|
+| **Data Connect timeout** | Queries acima de 10s, respostas vazias | Ative `streaming` no React Server Component, reduza payload com `limit`, utilize `executeQuery` com `signal` abortable e monitore métricas no Firebase Studio. |
+| **Cache invalidation não funciona** | Dados obsoletos após deploy | Garanta chaves previsíveis, use `queryClient.invalidateQueries` após mutações e configure `CacheService.setMany` com tags coerentes. |
+| **Rate limiting agressivo** | Usuários legítimos bloqueados | Ajuste o `TokenBucket` para limites por rota, adicione whitelists para tarefas internas e registre métricas de consumo. |
+| **Build falha no Firebase Hosting** | `npm run build` quebra no deploy | Certifique `firebase experiments:enable webframeworks`, valide `next.config.js` e limpe `node_modules` com `firebase hosting:channel:deploy --only hosting`. |
+| **CORS no Cloudflare Worker** | Requisições 403/blocked | Revise lista de origens, ative `OPTIONS` preflight e aplique headers dinâmicos conforme ambiente. |
+
+## 🔄 Guias de Migração
+
+- **De Vercel para Firebase Studio:** configure `firebase init hosting`, habilite `webframeworks`, atualize DNS e mova secrets para `firebase env`.
+- **De REST para GraphQL (Data Connect):** converta endpoints em resolvers, gere tipos com `__generated__/graphql.ts` e substitua `fetch` por `executeQuery`/`executeMutation`.
+- **De Redux para Zustand:** identifique slices críticos, migre para stores com middlewares (`devtools`, `persist`) e use selectors memorizados.
+- **De styled-components para Tailwind:** traduza tokens de design para classes utilitárias, aplique `cva`/`clsx` para variantes e remova estilos globais não utilizados.
+
+## 📚 Glossário Essencial
+
+- **Data Connect:** camada GraphQL do Firebase com tipagem e execução serverless gerenciada.
+- **Durable Objects:** instâncias consistentes na edge Cloudflare para coordenação de estado.
+- **KV Namespace:** armazenamento chave-valor distribuído utilizado para cache e configuração.
+- **Edge Computing:** execução de código em regiões próximas ao usuário para reduzir latência.
+- **Hydration:** processo de anexar handlers client-side a markup gerada no servidor.
+
+## 💰 Estimativas de Custos
+
+| Serviço | Faixa Gratuita | Custo Estimado Mensal* |
+|---------|----------------|------------------------|
+| Firebase Firestore | 1 GiB storage / 50K reads | USD 25-80 (workloads médias) |
+| Firebase Hosting | 10 GB transferência | USD 0-20 conforme tráfego |
+| Firebase Auth | 10K verificações | USD 0-15 dependendo de MFA |
+| Cloudflare Workers | 100K execuções | USD 5-50 (plan Worker Paid) |
+| Cloudflare KV | 1 GB storage | USD 5-30 conforme operações |
+
+> *Valores aproximados, monitorar via dashboards oficiais.
+
+## 🛣️ Roadmap de Evolução
+
+1. **Suporte a i18n** com `next-intl` integrado ao Firebase Studio.
+2. **PWA capabilities** incluindo service worker customizado e caching offline.
+3. **Offline-first** para Firestore com sincronização incremental.
+4. **Real-time collaboration** com Presence e CRDTs hospedados em Durable Objects.
+
+## 🎯 Prioridades de Implementação
+
+### Alta Prioridade
+- Corrigir exemplos de Data Connect com React Query e invalidation.
+- Reforçar segurança JWT no Worker com verificação dedicada.
+- Adicionar error boundaries e loading states consistentes.
+- Implementar logging estruturado com sampling.
+- Configurar testes integrados utilizando Firebase Emulators.
+
+### Média Prioridade
+- Adicionar container queries em layouts críticos.
+- Implementar cache `getCachedWithSWR` para dados estratégicos.
+- Aperfeiçoar rate limiting com Token Bucket configurável.
+- Rodar bundle analysis no CI/CD (`@next/bundle-analyzer`).
+- Criar componentes reutilizáveis adicionais (e.g. `AnimatedLayout`).
+
+### Baixa Prioridade
+- Documentar APIs públicas e contratos GraphQL.
+- Expandir exemplos avançados para charts/visualizações.
+- Automatizar governança de custos com alertas.
 
 ## 🎯 RESUMO DAS DIRETRIZES
 
