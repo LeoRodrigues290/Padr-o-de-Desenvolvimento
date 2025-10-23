@@ -788,6 +788,15 @@ export class CacheService {
       expirationTtl: ttl,
       metadata: { tags, createdAt: Date.now() }
     });
+
+    // Criar índice reverso para cada tag => chave original
+    await Promise.all(
+      tags.map((tag) =>
+        this.kv.put(`tag:${tag}:${key}`, key, {
+          expirationTtl: ttl
+        })
+      )
+    );
   }
 
   async setMany<T>(entries: Array<{ key: string; value: T; options?: CacheOptions }>) {
@@ -1223,6 +1232,34 @@ export const useDataStore = create<DataStore>()(
     { name: 'DataStore' }
   )
 );
+
+// Consumindo junto com o TanStack Query (sem duplicar cache do servidor)
+export function useProjectsView(status?: ProjectStatus) {
+  const { data: projects } = useProjects(status);
+  const { filters, optimisticProjects } = useDataViewStore();
+
+  return useMemo(() => {
+    const filtered = (projects ?? []).filter((project) => {
+      const matchesStatus =
+        filters.status === 'ALL' || project.status === filters.status;
+      const matchesSearch = project.name
+        .toLowerCase()
+        .includes(filters.search.toLowerCase());
+      return matchesStatus && matchesSearch;
+    });
+
+    const optimistic = optimisticProjects.map(({ tempId, input }) => ({
+      id: tempId,
+      ...input,
+      status: input.status ?? 'ACTIVE',
+      optimistic: true
+    }));
+
+    return [...optimistic, ...filtered];
+  }, [projects, filters, optimisticProjects]);
+}
+
+> ⚠️ **Importante:** o cache de dados do servidor continua sendo responsabilidade do TanStack Query. O Zustand atua como uma camada de orquestração para estado de interface (filtros, seleção, filas otimistas), evitando duplicar e dessincronizar dados vindos das queries.
 ```
 
 ---
